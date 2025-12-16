@@ -193,7 +193,13 @@
             }
 
             createVirtualJoystick() {
-                if (this.joyBase) return; // Already created
+                // If joystick exists from previous run, destroy it first to ensure fresh state
+                if (this.joyBase) {
+                    this.joyBase.destroy();
+                    this.joyThumb.destroy();
+                    this.joyBase = null;
+                    this.joyThumb = null;
+                }
 
                 this.joyBase = this.add.circle(0, 0, 50, 0x888888).setAlpha(0.5).setDepth(100).setVisible(false);
                 this.joyThumb = this.add.circle(0, 0, 25, 0xcccccc).setAlpha(0.8).setDepth(101).setVisible(false);
@@ -367,7 +373,7 @@
                 const centerX = this.cameras.main.centerX;
 
                 this.add.text(centerX, 50, `Level ${gameState.level} Complete!`, { fontSize: '32px', fill: '#0f0', fontStyle: 'bold' }).setOrigin(0.5);
-                this.add.text(centerX, 100, `Money Available: $${gameState.money}`, { fontSize: '24px', fill: '#fff' }).setOrigin(0.5);
+                this.moneyText = this.add.text(centerX, 100, `Money Available: $${gameState.money}`, { fontSize: '24px', fill: '#fff' }).setOrigin(0.5);
 
                 // Upgrades
                 let y = 160;
@@ -447,12 +453,7 @@
                     }
                 });
 
-                // Store reference in this if I haven't yet
-                if (!this.moneyText) {
-                    // Find the money text. It was the 2nd text added.
-                    // Using list
-                    this.moneyText = this.children.list.find(c => c.text && c.text.startsWith('Money'));
-                }
+
 
                 updateBtn();
             }
