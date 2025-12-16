@@ -146,6 +146,7 @@
                 if (this.isGameOver) return;
 
                 // 1. Player Movement
+                this.createVirtualJoystick();
                 this.handlePlayerMovement();
 
                 // 2. Auto Firing
@@ -185,6 +186,53 @@
                 this.timerText.setText(`Next Stop: ${remaining}s`);
             }
 
+            createVirtualJoystick() {
+                if (this.joyBase) return; // Already created
+
+                this.joyBase = this.add.circle(0, 0, 50, 0x888888).setAlpha(0.5).setDepth(100).setVisible(false);
+                this.joyThumb = this.add.circle(0, 0, 25, 0xcccccc).setAlpha(0.8).setDepth(101).setVisible(false);
+                this.joyVector = new Phaser.Math.Vector2(0, 0);
+                this.isTouching = false;
+
+                this.input.on('pointerdown', (pointer) => {
+                    // Only activate on left side of screen for movement
+                    if (pointer.x < this.cameras.main.width / 2) {
+                        this.isTouching = true;
+                        this.joyBase.setPosition(pointer.x, pointer.y).setVisible(true);
+                        this.joyThumb.setPosition(pointer.x, pointer.y).setVisible(true);
+                        this.joyStartPos = new Phaser.Math.Vector2(pointer.x, pointer.y);
+                        this.joyVector.set(0, 0);
+                    }
+                });
+
+                this.input.on('pointermove', (pointer) => {
+                    if (this.isTouching) {
+                        const dist = Phaser.Math.Distance.Between(this.joyStartPos.x, this.joyStartPos.y, pointer.x, pointer.y);
+                        const angle = Phaser.Math.Angle.Between(this.joyStartPos.x, this.joyStartPos.y, pointer.x, pointer.y);
+
+                        // Cap the distance at 50 (radius of base)
+                        const force = Math.min(dist, 50);
+
+                        const normalizedForce = force / 50; // 0 to 1
+
+                        const thumbX = this.joyStartPos.x + Math.cos(angle) * force;
+                        const thumbY = this.joyStartPos.y + Math.sin(angle) * force;
+
+                        this.joyThumb.setPosition(thumbX, thumbY);
+
+                        // Set vector for movement (normalized direction * force magnitude)
+                        this.joyVector.set(Math.cos(angle), Math.sin(angle)).scale(normalizedForce);
+                    }
+                });
+
+                this.input.on('pointerup', () => {
+                    this.isTouching = false;
+                    this.joyBase.setVisible(false);
+                    this.joyThumb.setVisible(false);
+                    this.joyVector.set(0, 0);
+                });
+            }
+
             handlePlayerMovement() {
                 const speed = gameState.moveSpeed;
                 const body = this.player.body;
@@ -196,14 +244,31 @@
                 const up = this.cursors.up.isDown || this.wasd.up.isDown;
                 const down = this.cursors.down.isDown || this.wasd.down.isDown;
 
-                if (left) body.setVelocityX(-speed);
-                else if (right) body.setVelocityX(speed);
+                let velocityX = 0;
+                let velocityY = 0;
 
-                if (up) body.setVelocityY(-speed);
-                else if (down) body.setVelocityY(speed);
+                // Keyboard input
+                if (left) velocityX = -1;
+                else if (right) velocityX = 1;
 
-                // Diagonal movement normalization
-                body.velocity.normalize().scale(speed);
+                if (up) velocityY = -1;
+                else if (down) velocityY = 1;
+
+                // Joystick input (additive or override)
+                if (this.joyVector && (this.joyVector.x !== 0 || this.joyVector.y !== 0)) {
+                    velocityX = this.joyVector.x;
+                    velocityY = this.joyVector.y;
+                }
+
+                // Apply velocity
+                const finalVec = new Phaser.Math.Vector2(velocityX, velocityY);
+                // Normalize if it's keyboard input (magnitude > 1 check is rough but okay since joystick is 0-1)
+                // Actually, just checking if length > 1 is good practice so diagonal keyboard isn't faster
+                if (finalVec.length() > 1) {
+                    finalVec.normalize();
+                }
+
+                body.setVelocity(finalVec.x * speed, finalVec.y * speed);
 
                 // Update facing direction if moving
                 if (body.velocity.x !== 0 || body.velocity.y !== 0) {
@@ -429,7 +494,11 @@
                     debug: false
                 }
             },
-            scene: [BootScene, GameScene, StoreScene, GameOverScene]
+            scene: [BootScene, GameScene, StoreScene, GameOverScene],
+            scale: {
+                mode: Phaser.Scale.FIT,
+                autoCenter: Phaser.Scale.CENTER_BOTH
+            }
         };
 
         // Initialize Game
