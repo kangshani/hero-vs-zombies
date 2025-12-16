@@ -6,17 +6,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Survival Shooter</title>
     <style>
+        html,
         body {
             margin: 0;
             padding: 0;
+            width: 100%;
+            height: 100%;
             background-color: #1a1a1a;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            color: #fff;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             overflow: hidden;
+            touch-action: none;
+            /* Prevent browser zooming/scrolling on touch */
         }
 
         canvas {
@@ -104,7 +103,7 @@
 
                 // --- Player ---
                 // Create Player Sprite
-                this.player = this.physics.add.sprite(400, 300, 'hero');
+                this.player = this.physics.add.sprite(this.scale.width / 2, this.scale.height / 2, 'hero');
                 this.player.setCollideWorldBounds(true);
 
                 // Resize to appropriate game size (Adjusted: 60x60 based on tighter crop)
@@ -507,6 +506,7 @@
                 autoCenter: Phaser.Scale.CENTER_BOTH
             },
             scene: [BootScene, GameScene, StoreScene, GameOverScene],
+            canvasStyle: 'display: block; width: 100%; height: 100%;'
         };
 
         // Initialize Game
