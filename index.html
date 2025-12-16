@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Survival Shooter</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #1a1a1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+
+        canvas {
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            border-radius: 4px;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+</head>
+
+<body>
+
+    <script>
+        /**
+         * Global Game State
+         */
+        const startStats = {
+            moveSpeed: 200,
+            fireInterval: 400,
+            bulletSpeed: 500,
+            bulletDamage: 1,
+            money: 0,
+            score: 0,
+            level: 1
+        };
+
+        // Mutable game state
+        let gameState = JSON.parse(JSON.stringify(startStats));
+
+        /**
+         * Utility to reset game state
+         */
+        function resetGameState() {
+            gameState = JSON.parse(JSON.stringify(startStats));
+        }
+
+        class BootScene extends Phaser.Scene {
+            constructor() {
+                super({ key: 'BootScene' });
+            }
+
+            preload() {
+                this.load.image('hero', 'hero.png');
+                this.load.svg('zombie', 'zombie.svg', { width: 64, height: 64 });
+            }
+
+            create() {
+                // Just immediately start the game
+                this.scene.start('GameScene');
+            }
+        }
+
+        class GameScene extends Phaser.Scene {
+            constructor() {
+                super({ key: 'GameScene' });
+            }
+
+            init() {
+                this.levelDuration = 30000; // 30 seconds per level loop
+                this.levelTimer = 0;
+                this.nextSpawnTime = 0;
+                this.nextFireTime = 0;
+
+                // Calculate spawn rate based on level (decreases as level increases)
+                // Base 2000ms, decreases by 10% each level, min 400ms
+                this.spawnRate = Math.max(400, 2000 * Math.pow(0.9, gameState.level - 1));
+
+                this.lastDirection = new Phaser.Math.Vector2(0, -1); // Default facing up
+                this.isGameOver = false;
+                this.scoreText = null;
+                this.timerText = null;
+            }
+
+            create() {
+                this.isGameOver = false;
+
+                // --- Inputs ---
+                this.cursors = this.input.keyboard.createCursorKeys();
+                this.wasd = this.input.keyboard.addKeys({
+                    up: Phaser.Input.Keyboard.KeyCodes.W,
+                    down: Phaser.Input.Keyboard.KeyCodes.S,
+                    left: Phaser.Input.Keyboard.KeyCodes.A,
+                    right: Phaser.Input.Keyboard.KeyCodes.D
+                });
+
+                // --- Player ---
+                // Create Player Sprite
+                this.player = this.physics.add.sprite(400, 300, 'hero');
+                this.player.setCollideWorldBounds(true);
+
+                // Resize to appropriate game size (Adjusted: 60x60 based on tighter crop)
+                this.player.setDisplaySize(60, 60);
+
+                // Adjust hitbox
+                this.player.body.setSize(45, 45);
+
+
+                // --- Groups ---
+                // Zombies
+                this.zombies = this.physics.add.group();
+
+                // Bullets
+                this.bullets = this.physics.add.group();
+
+                // --- Collisions ---
+                // Bullet hits Zombie
+                this.physics.add.overlap(this.bullets, this.zombies, this.handleBulletHitZombie, null, this);
+
+                // Zombie hits Player
+                this.physics.add.overlap(this.player, this.zombies, this.handlePlayerHit, null, this);
+
+                // --- UI ---
+                this.scoreText = this.add.text(10, 10, `Score: ${gameState.score}\nMoney: $${gameState.money}`, { fontSize: '16px', fill: '#fff' });
+                this.levelText = this.add.text(400, 10, `Level: ${gameState.level}`, { fontSize: '16px', fill: '#ffff00' }).setOrigin(0.5, 0);
+                this.timerText = this.add.text(790, 10, 'Time: 0', { fontSize: '16px', fill: '#fff' }).setOrigin(1, 0);
+
+                // --- Level Timer ---
+                // We track duration to progress
+                this.gameTimerEvent = this.time.addEvent({
+                    delay: this.levelDuration,
+                    callback: this.levelComplete,
+                    callbackScope: this
+                });
+            }
+
+            update(time, delta) {
+                if (this.isGameOver) return;
+
+                // 1. Player Movement
+                this.handlePlayerMovement();
+
+                // 2. Auto Firing
+                if (time > this.nextFireTime) {
+                    this.fireBullet();
+                    this.nextFireTime = time + gameState.fireInterval;
+                }
+
+                // 3. Spawning Zombies
+                if (time > this.nextSpawnTime) {
+                    this.spawnZombie();
+                    this.nextSpawnTime = time + this.spawnRate;
+                }
+
+                // 4. Move Zombies
+                this.zombies.children.iterate((zombie) => {
+                    if (zombie) {
+                        this.physics.moveToObject(zombie, this.player, 10 + (gameState.level * 10)); // Increase zombie speed per level
+                        // Rotate zombie to face player (visual polish)
+                        const angle = Phaser.Math.Angle.Between(zombie.x, zombie.y, this.player.x, this.player.y);
+                        zombie.rotation = angle;
+                    }
+                });
+
+                // 5. Cleanup Bullets
+                this.bullets.children.iterate((bullet) => {
+                    if (bullet) {
+                        if (bullet.x < -50 || bullet.x > 850 || bullet.y < -50 || bullet.y > 650) {
+                            bullet.destroy();
+                        }
+                    }
+                });
+
+                // 6. UI Updates
+                this.scoreText.setText(`Score: ${gameState.score}\nMoney: $${gameState.money}`);
+                const remaining = Math.ceil((this.gameTimerEvent.delay - this.gameTimerEvent.elapsed) / 1000);
+                this.timerText.setText(`Next Stop: ${remaining}s`);
+            }
+
+            handlePlayerMovement() {
+                const speed = gameState.moveSpeed;
+                const body = this.player.body;
+
+                body.setVelocity(0);
+
+                const left = this.cursors.left.isDown || this.wasd.left.isDown;
+                const right = this.cursors.right.isDown || this.wasd.right.isDown;
+                const up = this.cursors.up.isDown || this.wasd.up.isDown;
+                const down = this.cursors.down.isDown || this.wasd.down.isDown;
+
+                if (left) body.setVelocityX(-speed);
+                else if (right) body.setVelocityX(speed);
+
+                if (up) body.setVelocityY(-speed);
+                else if (down) body.setVelocityY(speed);
+
+                // Diagonal movement normalization
+                body.velocity.normalize().scale(speed);
+
+                // Update facing direction if moving
+                if (body.velocity.x !== 0 || body.velocity.y !== 0) {
+                    this.lastDirection = body.velocity.clone().normalize();
+                    this.player.setRotation(this.lastDirection.angle() + Math.PI / 2);
+                }
+            }
+
+            fireBullet() {
+                // Determine bullet spawn offset to match gun nozzle
+                // Assuming sprite size is 60x60, offset ~38px in direction of facing to clear the body
+                const offset = this.lastDirection.clone().scale(38);
+
+                const x = this.player.x + offset.x;
+                const y = this.player.y + offset.y;
+
+                // Create bullet
+                // Using a small yellow rectangle
+                const bullet = this.add.rectangle(x, y, 8, 8, 0xffff00);
+                this.physics.add.existing(bullet);
+                this.bullets.add(bullet);
+
+                // Move bullet
+                const vec = this.lastDirection.clone().scale(gameState.bulletSpeed);
+                bullet.body.setVelocity(vec.x, vec.y);
+            }
+
+            spawnZombie() {
+                // Spawn at edges
+                let x, y;
+                const edge = Phaser.Math.Between(0, 3); // 0:top, 1:right, 2:bottom, 3:left
+                const padding = 20;
+
+                switch (edge) {
+                    case 0: // Top
+                        x = Phaser.Math.Between(0, 800);
+                        y = -padding;
+                        break;
+                    case 1: // Right
+                        x = 800 + padding;
+                        y = Phaser.Math.Between(0, 600);
+                        break;
+                    case 2: // Bottom
+                        x = Phaser.Math.Between(0, 800);
+                        y = 600 + padding;
+                        break;
+                    case 3: // Left
+                        x = -padding;
+                        y = Phaser.Math.Between(0, 600);
+                        break;
+                }
+
+                // Create Zombie (Sprite)
+                const zombie = this.physics.add.sprite(x, y, 'zombie');
+                zombie.setDisplaySize(50, 50); // Slightly smaller than hero
+                zombie.body.setSize(40, 40);
+                this.zombies.add(zombie);
+            }
+
+            handleBulletHitZombie(bullet, zombie) {
+                bullet.destroy();
+                zombie.destroy();
+
+                gameState.score += 10;
+                gameState.money += 10;
+            }
+
+            handlePlayerHit(player, zombie) {
+                if (this.isGameOver) return;
+                this.isGameOver = true;
+                this.physics.pause();
+                this.player.setTint(0x555555); // Dead color
+
+                // Brief delay before Game Over screen
+                this.time.delayedCall(500, () => {
+                    this.scene.start('GameOverScene');
+                });
+            }
+
+            levelComplete() {
+                this.scene.start('StoreScene');
+            }
+        }
+
+        class StoreScene extends Phaser.Scene {
+            constructor() {
+                super({ key: 'StoreScene' });
+            }
+
+            create() {
+                const centerX = this.cameras.main.centerX;
+
+                this.add.text(centerX, 50, `Level ${gameState.level} Complete!`, { fontSize: '32px', fill: '#0f0', fontStyle: 'bold' }).setOrigin(0.5);
+                this.add.text(centerX, 100, `Money Available: $${gameState.money}`, { fontSize: '24px', fill: '#fff' }).setOrigin(0.5);
+
+                // Upgrades
+                let y = 160;
+
+                this.createUpgradeRow(centerX, y, 'Fire Rate', 'fireInterval', 100, (val) => Math.max(50, val - 30));
+                y += 80;
+                this.createUpgradeRow(centerX, y, 'Movement Speed', 'moveSpeed', 100, (val) => val + 20);
+                y += 80;
+                this.createUpgradeRow(centerX, y, 'Bullet Speed', 'bulletSpeed', 80, (val) => val + 50);
+
+                // Next Level Button
+                const nextBtn = this.add.rectangle(centerX, 500, 200, 60, 0x00aa00)
+                    .setInteractive({ useHandCursor: true });
+                const nextText = this.add.text(centerX, 500, "Start Next Level", { fontSize: '24px', fill: '#fff' }).setOrigin(0.5);
+
+                nextBtn.on('pointerdown', () => {
+                    gameState.level++;
+                    this.scene.start('GameScene');
+                });
+
+                // Button Hover Effects
+                nextBtn.on('pointerover', () => nextBtn.setFillStyle(0x00cc00));
+                nextBtn.on('pointerout', () => nextBtn.setFillStyle(0x00aa00));
+            }
+
+            createUpgradeRow(x, y, label, statKey, cost, modifierFn) {
+                // Label with current stat
+                let currentVal = gameState[statKey];
+                // Format fireInterval to Shots Per Sec for display? Or just raw number. Raw is fine for simplicity.
+                // Actually, Fire Rate implies frequency. Speed implies distance/time.
+
+                // Row container logic handled via y offsets
+
+                const labelText = this.add.text(x - 200, y, `${label}: ${currentVal}`, { fontSize: '20px', fill: '#aaa' }).setOrigin(0, 0.5);
+
+                // Buy Button
+                const btn = this.add.rectangle(x + 150, y, 140, 40, 0x444444).setInteractive({ useHandCursor: true });
+                const btnText = this.add.text(x + 150, y, `Buy ($${cost})`, { fontSize: '18px', fill: '#fff' }).setOrigin(0.5);
+
+                const updateBtn = () => {
+                    if (gameState.money >= cost) {
+                        btn.setFillStyle(0x0088ff);
+                        btnText.setText(`Buy ($${cost})`);
+                        btnText.setColor('#ffffff');
+                    } else {
+                        btn.setFillStyle(0x333333);
+                        btnText.setColor('#888888');
+                    }
+                    labelText.setText(`${label}: ${gameState[statKey]}`);
+                };
+
+                btn.on('pointerdown', () => {
+                    if (gameState.money >= cost) {
+                        gameState.money -= cost;
+                        gameState[statKey] = modifierFn(gameState[statKey]);
+                        // Visual feedback
+                        this.tweens.add({
+                            targets: btn,
+                            scaleX: 1.1,
+                            scaleY: 1.1,
+                            duration: 50,
+                            yoyo: true
+                        });
+                        updateBtn();
+                        // Update money display at top (we need a reference or just recreate scene? simpler to just redraw or find object)
+                        // A quick hack: restart scene to refresh? No, let's just update title manually if we kept ref, or just assume player looks at button.
+                        // Better: Just fetch the header text if possible, but I didn't store it. 
+                        // Let's just create a global money updater or refresh scene. 
+                        // Since this is a simple script, I won't overengineer.
+                        // Re-rendering the text by ID or just adding on top is weird.
+                        // Let's just redraw the whole scene? No.
+                        // I'll leave the top money text stale? No, user needs to see it.
+                        // I'll grab the top text via a tag or just store it in 'this'.
+                        // Since I didn't store it in 'this' in the previous block...
+                        // I will modify the Create method to store it.
+                        this.moneyText.setText(`Money Available: $${gameState.money}`);
+                    }
+                });
+
+                // Store reference in this if I haven't yet
+                if (!this.moneyText) {
+                    // Find the money text. It was the 2nd text added.
+                    // Using list
+                    this.moneyText = this.children.list.find(c => c.text && c.text.startsWith('Money'));
+                }
+
+                updateBtn();
+            }
+        }
+
+        class GameOverScene extends Phaser.Scene {
+            constructor() {
+                super({ key: 'GameOverScene' });
+            }
+
+            create() {
+                const centerX = this.cameras.main.centerX;
+                const centerY = this.cameras.main.centerY;
+
+                this.add.text(centerX, centerY - 100, 'GAME OVER', { fontSize: '64px', fill: '#ff0000', fontStyle: 'bold' }).setOrigin(0.5);
+                this.add.text(centerX, centerY, `Final Score: ${gameState.score}`, { fontSize: '32px', fill: '#fff' }).setOrigin(0.5);
+                this.add.text(centerX, centerY + 50, `Level Reached: ${gameState.level}`, { fontSize: '24px', fill: '#aaa' }).setOrigin(0.5);
+
+                // Restart Button
+                const restartBtn = this.add.rectangle(centerX, centerY + 150, 200, 60, 0xffffff)
+                    .setInteractive({ useHandCursor: true });
+                const restartText = this.add.text(centerX, centerY + 150, "Restart", { fontSize: '24px', fill: '#000' }).setOrigin(0.5);
+
+                restartBtn.on('pointerdown', () => {
+                    resetGameState();
+                    this.scene.start('GameScene');
+                });
+
+                restartBtn.on('pointerover', () => restartBtn.setFillStyle(0xcccccc));
+                restartBtn.on('pointerout', () => restartBtn.setFillStyle(0xffffff));
+            }
+        }
+
+        // Game Configuration
+        const config = {
+            type: Phaser.AUTO,
+            width: 800,
+            height: 600,
+            parent: document.body,
+            backgroundColor: '#222222',
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    debug: false
+                }
+            },
+            scene: [BootScene, GameScene, StoreScene, GameOverScene]
+        };
+
+        // Initialize Game
+        const game = new Phaser.Game(config);
+
+    </script>
+</body>
+
+</html>
