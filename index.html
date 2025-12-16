@@ -130,8 +130,8 @@
 
                 // --- UI ---
                 this.scoreText = this.add.text(10, 10, `Score: ${gameState.score}\nMoney: $${gameState.money}`, { fontSize: '16px', fill: '#fff' });
-                this.levelText = this.add.text(400, 10, `Level: ${gameState.level}`, { fontSize: '16px', fill: '#ffff00' }).setOrigin(0.5, 0);
-                this.timerText = this.add.text(790, 10, 'Time: 0', { fontSize: '16px', fill: '#fff' }).setOrigin(1, 0);
+                this.levelText = this.add.text(this.scale.width / 2, 10, `Level: ${gameState.level}`, { fontSize: '16px', fill: '#ffff00' }).setOrigin(0.5, 0);
+                this.timerText = this.add.text(this.scale.width - 10, 10, 'Time: 0', { fontSize: '16px', fill: '#fff' }).setOrigin(1, 0);
 
                 // --- Level Timer ---
                 // We track duration to progress
@@ -140,6 +140,10 @@
                     callback: this.levelComplete,
                     callbackScope: this
                 });
+
+                // Update physics bounds to match new screen size
+                this.physics.world.setBounds(0, 0, this.scale.width, this.scale.height);
+                this.player.setCollideWorldBounds(true); // Re-apply to update bounds
             }
 
             update(time, delta) {
@@ -172,9 +176,11 @@
                 });
 
                 // 5. Cleanup Bullets
+                const w = this.scale.width;
+                const h = this.scale.height;
                 this.bullets.children.iterate((bullet) => {
                     if (bullet) {
-                        if (bullet.x < -50 || bullet.x > 850 || bullet.y < -50 || bullet.y > 650) {
+                        if (bullet.x < -50 || bullet.x > w + 50 || bullet.y < -50 || bullet.y > h + 50) {
                             bullet.destroy();
                         }
                     }
@@ -303,21 +309,22 @@
                 const padding = 20;
 
                 switch (edge) {
+
                     case 0: // Top
-                        x = Phaser.Math.Between(0, 800);
+                        x = Phaser.Math.Between(0, this.scale.width);
                         y = -padding;
                         break;
                     case 1: // Right
-                        x = 800 + padding;
-                        y = Phaser.Math.Between(0, 600);
+                        x = this.scale.width + padding;
+                        y = Phaser.Math.Between(0, this.scale.height);
                         break;
                     case 2: // Bottom
-                        x = Phaser.Math.Between(0, 800);
-                        y = 600 + padding;
+                        x = Phaser.Math.Between(0, this.scale.width);
+                        y = this.scale.height + padding;
                         break;
                     case 3: // Left
                         x = -padding;
-                        y = Phaser.Math.Between(0, 600);
+                        y = Phaser.Math.Between(0, this.scale.height);
                         break;
                 }
 
@@ -482,10 +489,11 @@
         }
 
         // Game Configuration
+        // Game Configuration
         const config = {
             type: Phaser.AUTO,
-            width: 800,
-            height: 600,
+            width: window.innerWidth,
+            height: window.innerHeight,
             parent: document.body,
             backgroundColor: '#222222',
             physics: {
@@ -494,11 +502,11 @@
                     debug: false
                 }
             },
-            scene: [BootScene, GameScene, StoreScene, GameOverScene],
             scale: {
-                mode: Phaser.Scale.FIT,
+                mode: Phaser.Scale.RESIZE,
                 autoCenter: Phaser.Scale.CENTER_BOTH
-            }
+            },
+            scene: [BootScene, GameScene, StoreScene, GameOverScene],
         };
 
         // Initialize Game
