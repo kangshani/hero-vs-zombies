@@ -143,13 +143,14 @@
                 // Update physics bounds to match new screen size
                 this.physics.world.setBounds(0, 0, this.scale.width, this.scale.height);
                 this.player.setCollideWorldBounds(true); // Re-apply to update bounds
+
+                this.createVirtualJoystick();
             }
 
             update(time, delta) {
                 if (this.isGameOver) return;
 
                 // 1. Player Movement
-                this.createVirtualJoystick();
                 this.handlePlayerMovement();
 
                 // 2. Auto Firing
@@ -200,14 +201,12 @@
                 this.isTouching = false;
 
                 this.input.on('pointerdown', (pointer) => {
-                    // Only activate on left side of screen for movement
-                    if (pointer.x < this.cameras.main.width / 2) {
-                        this.isTouching = true;
-                        this.joyBase.setPosition(pointer.x, pointer.y).setVisible(true);
-                        this.joyThumb.setPosition(pointer.x, pointer.y).setVisible(true);
-                        this.joyStartPos = new Phaser.Math.Vector2(pointer.x, pointer.y);
-                        this.joyVector.set(0, 0);
-                    }
+                    // Activate joystick anywhere on screen
+                    this.isTouching = true;
+                    this.joyBase.setPosition(pointer.x, pointer.y).setVisible(true);
+                    this.joyThumb.setPosition(pointer.x, pointer.y).setVisible(true);
+                    this.joyStartPos = new Phaser.Math.Vector2(pointer.x, pointer.y);
+                    this.joyVector.set(0, 0);
                 });
 
                 this.input.on('pointermove', (pointer) => {
