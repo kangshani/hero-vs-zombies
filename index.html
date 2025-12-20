@@ -39,7 +39,9 @@
             bulletDamage: 1,
             money: 0,
             score: 0,
-            level: 1
+            level: 1,
+            maxHealth: 3,
+            currentHealth: 3
         };
 
         // Mutable game state
@@ -144,6 +146,10 @@
                 this.physics.world.setBounds(0, 0, this.scale.width, this.scale.height);
                 this.player.setCollideWorldBounds(true); // Re-apply to update bounds
 
+                // Health Bars Graphics
+                this.healthBarGraphics = this.add.graphics();
+                this.healthBarGraphics.setDepth(100);
+
                 this.createVirtualJoystick();
             }
 
@@ -190,6 +196,51 @@
                 this.scoreText.setText(`Score: ${gameState.score}\nMoney: $${gameState.money}`);
                 const remaining = Math.ceil((this.gameTimerEvent.delay - this.gameTimerEvent.elapsed) / 1000);
                 this.timerText.setText(`Next Stop: ${remaining}s`);
+
+                this.drawHealthBars();
+            }
+
+            drawHealthBars() {
+                this.healthBarGraphics.clear();
+
+                // Hero Health Bar (Green)
+                if (this.player && this.player.active) {
+                    const x = this.player.x;
+                    const y = this.player.y - 45;
+                    const width = 40;
+                    const height = 5;
+
+                    // Background
+                    this.healthBarGraphics.fillStyle(0x000000);
+                    this.healthBarGraphics.fillRect(x - width / 2, y, width, height);
+
+                    // Bar
+                    const pct = Math.max(0, gameState.currentHealth / gameState.maxHealth);
+                    this.healthBarGraphics.fillStyle(0x00ff00);
+                    this.healthBarGraphics.fillRect(x - width / 2, y, width * pct, height);
+                }
+
+                // Zombie Health Bars (Red)
+                this.zombies.children.iterate((zombie) => {
+                    if (zombie && zombie.active) {
+                        const x = zombie.x;
+                        const y = zombie.y - 35;
+                        const width = 30;
+                        const height = 4;
+
+                        // Background
+                        this.healthBarGraphics.fillStyle(0x000000);
+                        this.healthBarGraphics.fillRect(x - width / 2, y, width, height);
+
+                        // Bar
+                        const hp = zombie.hp !== undefined ? zombie.hp : (zombie.maxHp || 1);
+                        const max = zombie.maxHp || 1;
+                        const pct = Math.max(0, hp / max);
+
+                        this.healthBarGraphics.fillStyle(0xff0000);
+                        this.healthBarGraphics.fillRect(x - width / 2, y, width * pct, height);
+                    }
+                });
             }
 
             createVirtualJoystick() {
@@ -333,30 +384,72 @@
                 }
 
                 // Create Zombie (Sprite)
+                // Create Zombie (Sprite)
                 const zombie = this.physics.add.sprite(x, y, 'zombie');
                 zombie.setDisplaySize(50, 50); // Slightly smaller than hero
                 zombie.body.setSize(40, 40);
+                zombie.hp = 2;
+                zombie.maxHp = 2;
                 this.zombies.add(zombie);
             }
 
             handleBulletHitZombie(bullet, zombie) {
                 bullet.destroy();
-                zombie.destroy();
 
-                gameState.score += 10;
-                gameState.money += 10;
+                zombie.hp = (zombie.hp || 0) - gameState.bulletDamage;
+
+                if (zombie.hp <= 0) {
+                    zombie.destroy();
+                    gameState.score += 10;
+                    gameState.money += 10;
+                } else {
+                    // Flash impact
+                    this.tweens.add({
+                        targets: zombie,
+                        alpha: 0.5,
+                        duration: 50,
+                        yoyo: true
+                    });
+                }
             }
 
             handlePlayerHit(player, zombie) {
                 if (this.isGameOver) return;
-                this.isGameOver = true;
-                this.physics.pause();
-                this.player.setTint(0x555555); // Dead color
 
-                // Brief delay before Game Over screen
-                this.time.delayedCall(500, () => {
-                    this.scene.start('GameOverScene');
-                });
+                // Check invulnerability
+                if (this.player.isInvulnerable) return;
+
+                gameState.currentHealth -= 1;
+
+                // Visual feedback (Flash Red)
+                this.cameras.main.flash(100, 255, 0, 0);
+
+                if (gameState.currentHealth <= 0) {
+                    this.isGameOver = true;
+                    this.physics.pause();
+                    this.player.setTint(0x555555); // Dead color
+
+                    // Brief delay before Game Over screen
+                    this.time.delayedCall(500, () => {
+                        this.scene.start('GameOverScene');
+                    });
+                } else {
+                    // Invulnerability (1 second)
+                    this.player.isInvulnerable = true;
+                    this.tweens.add({
+                        targets: this.player,
+                        alpha: 0.5,
+                        duration: 100,
+                        yoyo: true,
+                        repeat: 5,
+                        onComplete: () => {
+                            if (this.player && this.player.active) {
+                                this.player.isInvulnerable = false;
+                                this.player.alpha = 1;
+                            }
+                        }
+                    });
+                }
             }
 
             levelComplete() {
