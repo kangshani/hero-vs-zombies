@@ -1,0 +1,16 @@
+<svg width="128" height="128" xmlns="http://www.w3.org/2000/svg">
+    <!-- Boss Body (Large, Dark Red/Green) -->
+    <rect x="34" y="40" width="60" height="60" fill="#4a5d4a" rx="10" />
+    <!-- Arms -->
+    <rect x="14" y="50" width="20" height="50" fill="#4a5d4a" rx="5" />
+    <rect x="94" y="50" width="20" height="50" fill="#4a5d4a" rx="5" />
+    <!-- Head -->
+    <circle cx="64" cy="30" r="25" fill="#5b6e5b" />
+    <!-- Scars/Details -->
+    <path d="M50 20 L60 30" stroke="#333" stroke-width="2" />
+    <!-- Eyes (Glowing Red) -->
+    <circle cx="56" cy="25" r="4" fill="#ff0000" />
+    <circle cx="72" cy="25" r="4" fill="#ff0000" />
+    <!-- Mouth (Angry) -->
+    <path d="M54 40 Q64 35 74 40" stroke="#000" stroke-width="3" fill="none" />
+</svg>

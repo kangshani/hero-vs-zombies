@@ -62,6 +62,9 @@
             preload() {
                 this.load.image('hero', 'hero.png');
                 this.load.svg('zombie', 'zombie.svg', { width: 64, height: 64 });
+                this.load.svg('pig', 'pig.svg', { width: 64, height: 64 });
+                this.load.svg('female', 'female.svg', { width: 64, height: 64 });
+                this.load.svg('boss', 'boss.svg', { width: 128, height: 128 });
                 this.load.svg('road', 'road.svg', { width: 300, height: 300 });
             }
 
@@ -77,7 +80,25 @@
             }
 
             init() {
-                this.zombiesToKill = 10;
+                // Zombie Counts
+                this.zombieCounts = {
+                    normal: 10,
+                    pig: 5,
+                    female: 3,
+                    boss: 1
+                };
+
+                // Create Spawn Queue (Randomized)
+                this.spawnQueue = [];
+                for (let i = 0; i < this.zombieCounts.normal; i++) this.spawnQueue.push('normal');
+                for (let i = 0; i < this.zombieCounts.pig; i++) this.spawnQueue.push('pig');
+                for (let i = 0; i < this.zombieCounts.female; i++) this.spawnQueue.push('female');
+                for (let i = 0; i < this.zombieCounts.boss; i++) this.spawnQueue.push('boss');
+
+                // Shuffle
+                this.spawnQueue.sort(() => Math.random() - 0.5);
+
+                this.zombiesToKill = this.spawnQueue.length;
                 this.zombiesKilled = 0;
                 this.zombiesSpawned = 0;
                 this.nextSpawnTime = 0;
@@ -127,6 +148,7 @@
 
                 // Bullets
                 this.bullets = this.physics.add.group();
+                this.enemyBullets = this.physics.add.group();
 
                 // --- Collisions ---
                 // Bullet hits Zombie
@@ -135,25 +157,52 @@
                 // Zombie hits Player
                 this.physics.add.overlap(this.player, this.zombies, this.handlePlayerHit, null, this);
 
+                // Enemy Bullet hits Player
+                this.physics.add.overlap(this.player, this.enemyBullets, (player, bullet) => {
+                    bullet.destroy();
+                    this.handlePlayerHit(player, null);
+                }, null, this);
+
                 // --- UI ---
                 this.scoreText = this.add.text(10, 10, `Score: ${gameState.score}\nMoney: $${gameState.money}`, { fontSize: '16px', fill: '#fff' });
                 this.levelText = this.add.text(this.scale.width / 2, 10, `Level: ${gameState.level}`, { fontSize: '16px', fill: '#ffff00' }).setOrigin(0.5, 0);
 
                 // Zombie Icon and Count (Top Right)
-                const uiRightX = this.scale.width - 20;
+                // Zombie Icons and Counts (Top Right)
+                const uiRightX = this.scale.width - 20; // Right margin anchor
+                let uiY = 15;
+                const rowHeight = 45;
 
-                // 1. Icon
-                this.zombieIcon = this.add.image(uiRightX - 60, 25, 'zombie').setDisplaySize(24, 24);
+                // Helper to create a row
+                const createRow = (type, texture, count, speed, hp) => {
+                    // Icon
+                    this.add.image(uiRightX - 60, uiY + 10, texture).setDisplaySize(24, 24);
+                    // Count
+                    const countText = this.add.text(uiRightX, uiY, `: ${count}`, { fontSize: '20px', fill: '#fff' }).setOrigin(1, 0);
+                    // Stats
+                    this.add.text(uiRightX, uiY + 24, `SPD:${speed} HP:${hp}`, { fontSize: '12px', fill: '#aaa' }).setOrigin(1, 0);
 
-                // 2. Colon + Count
-                this.zombiesRemainingText = this.add.text(uiRightX, 15, `: ${this.zombiesToKill}`, { fontSize: '20px', fill: '#fff' }).setOrigin(1, 0);
+                    return { countText };
+                };
 
-                // 3. Stats (Underneath)
-                const currentZombieSpeed = 10 + (gameState.level * 10);
-                const currentZombieHP = 2; // Hardcoded in spawnZombie
+                // Base Speed
+                const baseSpeed = 10 + (gameState.level * 10);
 
-                this.add.text(uiRightX, 50, `Speed: ${currentZombieSpeed}`, { fontSize: '14px', fill: '#aaa' }).setOrigin(1, 0);
-                this.add.text(uiRightX, 68, `HP: ${currentZombieHP}`, { fontSize: '14px', fill: '#aaa' }).setOrigin(1, 0);
+                // 1. Normal
+                this.uiNormal = createRow('normal', 'zombie', this.zombieCounts.normal, baseSpeed, 2);
+                uiY += rowHeight;
+
+                // 2. Pig
+                this.uiPig = createRow('pig', 'pig', this.zombieCounts.pig, baseSpeed * 2, 2);
+                uiY += rowHeight;
+
+                // 3. Female
+                this.uiFemale = createRow('female', 'female', this.zombieCounts.female, baseSpeed, 2);
+                uiY += rowHeight;
+
+                // 4. Boss
+                this.uiBoss = createRow('boss', 'boss', this.zombieCounts.boss, baseSpeed, 10); // Base boss HP is 10 (2*5)
+
 
                 // --- Level Timer ---
                 // We track kill count to progress (Timer removed)
@@ -189,31 +238,62 @@
                     this.nextSpawnTime = time + this.spawnRate;
                 }
 
-                // 4. Move Zombies
+                // 4. Move/Update Zombies
                 this.zombies.children.iterate((zombie) => {
-                    if (zombie) {
-                        this.physics.moveToObject(zombie, this.player, 10 + (gameState.level * 10)); // Increase zombie speed per level
-                        // Rotate zombie to face player (visual polish)
+                    if (zombie && zombie.active) {
+                        // Movement
+                        const speed = zombie.moveSpeed || 10;
+                        this.physics.moveToObject(zombie, this.player, speed);
+
+                        // Rotation
                         const angle = Phaser.Math.Angle.Between(zombie.x, zombie.y, this.player.x, this.player.y);
                         zombie.rotation = angle;
-                    }
-                });
 
-                // 5. Cleanup Bullets
-                const w = this.scale.width;
-                const h = this.scale.height;
-                this.bullets.children.iterate((bullet) => {
-                    if (bullet) {
-                        if (bullet.x < -50 || bullet.x > w + 50 || bullet.y < -50 || bullet.y > h + 50) {
-                            bullet.destroy();
+                        // Special: Female Zombie Shooting
+                        if (zombie.zombieType === 'female') {
+                            if (!zombie.nextShootTime) zombie.nextShootTime = time + 2000;
+                            if (time > zombie.nextShootTime) {
+                                this.enemyShoot(zombie);
+                                zombie.nextShootTime = time + 3000 + Math.random() * 1000;
+                            }
                         }
                     }
                 });
 
+                // 5. Cleanup Bullets (Player and Enemy)
+                const w = this.scale.width;
+                const h = this.scale.height;
+                const cleanup = (group) => {
+                    group.children.iterate((b) => {
+                        if (b && (b.x < -50 || b.x > w + 50 || b.y < -50 || b.y > h + 50)) {
+                            b.destroy();
+                        }
+                    });
+                };
+                cleanup(this.bullets);
+                cleanup(this.enemyBullets);
+
                 // 6. UI Updates
                 this.scoreText.setText(`Score: ${gameState.score}\nMoney: $${gameState.money}`);
-                this.scoreText.setText(`Score: ${gameState.score}\nMoney: $${gameState.money}`);
-                this.zombiesRemainingText.setText(`: ${Math.max(0, this.zombiesToKill - this.zombiesKilled)}`);
+
+                // Calculate remaining counts
+                const counts = { normal: 0, pig: 0, female: 0, boss: 0 };
+
+                // Count from spawn queue (not yet spawned)
+                this.spawnQueue.forEach(type => { if (counts[type] !== undefined) counts[type]++; });
+
+                // Count active living zombies
+                this.zombies.children.iterate((z) => {
+                    if (z && z.active && z.zombieType) {
+                        counts[z.zombieType]++;
+                    }
+                });
+
+                // Update Texts
+                this.uiNormal.countText.setText(`: ${counts.normal}`);
+                this.uiPig.countText.setText(`: ${counts.pig}`);
+                this.uiFemale.countText.setText(`: ${counts.female}`);
+                this.uiBoss.countText.setText(`: ${counts.boss}`);
 
                 this.drawHealthBars();
             }
@@ -375,11 +455,27 @@
                 bullet.body.setVelocity(vec.x, vec.y);
             }
 
+            enemyShoot(zombie) {
+                // Shoot green ball at player
+                const bullet = this.add.circle(zombie.x, zombie.y, 6, 0x00ff00);
+                this.physics.add.existing(bullet);
+                this.enemyBullets.add(bullet);
+
+                // Calculate direction
+                const angle = Phaser.Math.Angle.Between(zombie.x, zombie.y, this.player.x, this.player.y);
+                const vec = new Phaser.Math.Vector2(Math.cos(angle), Math.sin(angle)).scale(300); // Speed 300
+                bullet.body.setVelocity(vec.x, vec.y);
+            }
+
             spawnZombie() {
+                // Get next type from queue
+                if (this.spawnQueue.length === 0) return;
+                const type = this.spawnQueue.pop();
+
                 // Spawn at edges
                 let x, y;
                 const edge = Phaser.Math.Between(0, 3); // 0:top, 1:right, 2:bottom, 3:left
-                const padding = 20;
+                const padding = 50; // Extra padding for big boss
 
                 switch (edge) {
 
@@ -401,13 +497,42 @@
                         break;
                 }
 
+                // Config based on type
+                let texture = 'zombie';
+                let hp = 2; // Normal
+                let speed = 10 + (gameState.level * 10);
+                let size = 50;
+                let bodySize = 40;
+
+                // Stats modifications
+                switch (type) {
+                    case 'normal':
+                        // Defaults
+                        break;
+                    case 'pig':
+                        texture = 'pig';
+                        speed *= 2; // Faster (2x)
+                        break;
+                    case 'female':
+                        texture = 'female';
+                        // Same speed/hp, shoots bullets (handled in update)
+                        break;
+                    case 'boss':
+                        texture = 'boss';
+                        hp *= 5; // 5x HP
+                        size = 100; // Bigger
+                        bodySize = 80;
+                        break;
+                }
+
                 // Create Zombie (Sprite)
-                // Create Zombie (Sprite)
-                const zombie = this.physics.add.sprite(x, y, 'zombie');
-                zombie.setDisplaySize(50, 50); // Slightly smaller than hero
-                zombie.body.setSize(40, 40);
-                zombie.hp = 2;
-                zombie.maxHp = 2;
+                const zombie = this.physics.add.sprite(x, y, texture);
+                zombie.setDisplaySize(size, size);
+                zombie.body.setSize(bodySize, bodySize);
+                zombie.hp = hp;
+                zombie.maxHp = hp;
+                zombie.moveSpeed = speed; // Store unique speed
+                zombie.zombieType = type; // Store type
                 this.zombies.add(zombie);
             }
 
