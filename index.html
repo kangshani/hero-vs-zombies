@@ -77,8 +77,9 @@
             }
 
             init() {
-                this.levelDuration = 30000; // 30 seconds per level loop
-                this.levelTimer = 0;
+                this.zombiesToKill = 10;
+                this.zombiesKilled = 0;
+                this.zombiesSpawned = 0;
                 this.nextSpawnTime = 0;
                 this.nextFireTime = 0;
 
@@ -137,15 +138,25 @@
                 // --- UI ---
                 this.scoreText = this.add.text(10, 10, `Score: ${gameState.score}\nMoney: $${gameState.money}`, { fontSize: '16px', fill: '#fff' });
                 this.levelText = this.add.text(this.scale.width / 2, 10, `Level: ${gameState.level}`, { fontSize: '16px', fill: '#ffff00' }).setOrigin(0.5, 0);
-                this.timerText = this.add.text(this.scale.width - 10, 10, 'Time: 0', { fontSize: '16px', fill: '#fff' }).setOrigin(1, 0);
+
+                // Zombie Icon and Count (Top Right)
+                const uiRightX = this.scale.width - 20;
+
+                // 1. Icon
+                this.zombieIcon = this.add.image(uiRightX - 60, 25, 'zombie').setDisplaySize(24, 24);
+
+                // 2. Colon + Count
+                this.zombiesRemainingText = this.add.text(uiRightX, 15, `: ${this.zombiesToKill}`, { fontSize: '20px', fill: '#fff' }).setOrigin(1, 0);
+
+                // 3. Stats (Underneath)
+                const currentZombieSpeed = 10 + (gameState.level * 10);
+                const currentZombieHP = 2; // Hardcoded in spawnZombie
+
+                this.add.text(uiRightX, 50, `Speed: ${currentZombieSpeed}`, { fontSize: '14px', fill: '#aaa' }).setOrigin(1, 0);
+                this.add.text(uiRightX, 68, `HP: ${currentZombieHP}`, { fontSize: '14px', fill: '#aaa' }).setOrigin(1, 0);
 
                 // --- Level Timer ---
-                // We track duration to progress
-                this.gameTimerEvent = this.time.addEvent({
-                    delay: this.levelDuration,
-                    callback: this.levelComplete,
-                    callbackScope: this
-                });
+                // We track kill count to progress (Timer removed)
 
                 // Update physics bounds to match new screen size
                 this.physics.world.setBounds(0, 0, this.scale.width, this.scale.height);
@@ -171,8 +182,10 @@
                 }
 
                 // 3. Spawning Zombies
-                if (time > this.nextSpawnTime) {
+                // 3. Spawning Zombies
+                if (time > this.nextSpawnTime && this.zombiesSpawned < this.zombiesToKill) {
                     this.spawnZombie();
+                    this.zombiesSpawned++;
                     this.nextSpawnTime = time + this.spawnRate;
                 }
 
@@ -199,8 +212,8 @@
 
                 // 6. UI Updates
                 this.scoreText.setText(`Score: ${gameState.score}\nMoney: $${gameState.money}`);
-                const remaining = Math.ceil((this.gameTimerEvent.delay - this.gameTimerEvent.elapsed) / 1000);
-                this.timerText.setText(`Next Stop: ${remaining}s`);
+                this.scoreText.setText(`Score: ${gameState.score}\nMoney: $${gameState.money}`);
+                this.zombiesRemainingText.setText(`: ${Math.max(0, this.zombiesToKill - this.zombiesKilled)}`);
 
                 this.drawHealthBars();
             }
@@ -407,6 +420,11 @@
                     zombie.destroy();
                     gameState.score += 10;
                     gameState.money += 10;
+
+                    this.zombiesKilled++;
+                    if (this.zombiesKilled >= this.zombiesToKill) {
+                        this.levelComplete();
+                    }
                 } else {
                     // Flash impact
                     this.tweens.add({
