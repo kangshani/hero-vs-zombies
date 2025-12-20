@@ -1,0 +1,19 @@
+<svg width="300" height="300" xmlns="http://www.w3.org/2000/svg">
+    <!-- Grass Sides -->
+    <rect width="300" height="300" fill="#2d4a2d" />
+    
+    <!-- Road Body -->
+    <rect x="40" width="220" height="300" fill="#333333" />
+    
+    <!-- Road Side Markings (White) -->
+    <rect x="45" width="4" height="300" fill="#cccccc" />
+    <rect x="251" width="4" height="300" fill="#cccccc" />
+    
+    <!-- Center Dashed Line (Yellow) -->
+    <line x1="150" y1="0" x2="150" y2="300" stroke="#f0c000" stroke-width="4" stroke-dasharray="40,30" />
+    
+    <!-- Some texture details (pebbles/imperfections) -->
+    <circle cx="100" cy="50" r="2" fill="#444444" />
+    <circle cx="200" cy="150" r="3" fill="#3a3a3a" />
+    <circle cx="80" cy="250" r="2" fill="#444444" />
+</svg>

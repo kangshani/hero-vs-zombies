@@ -62,6 +62,7 @@
             preload() {
                 this.load.image('hero', 'hero.png');
                 this.load.svg('zombie', 'zombie.svg', { width: 64, height: 64 });
+                this.load.svg('road', 'road.svg', { width: 300, height: 300 });
             }
 
             create() {
@@ -93,6 +94,10 @@
 
             create() {
                 this.isGameOver = false;
+
+                // --- Background ---
+                // Tiled road background
+                this.background = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'road').setOrigin(0, 0);
 
                 // --- Inputs ---
                 this.cursors = this.input.keyboard.createCursorKeys();
