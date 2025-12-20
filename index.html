@@ -164,7 +164,10 @@
                 }, null, this);
 
                 // --- UI ---
-                this.scoreText = this.add.text(10, 10, `Score: ${gameState.score}\nMoney: $${gameState.money}`, { fontSize: '16px', fill: '#fff' });
+                this.scoreText = this.add.text(10, 10,
+                    `Score: ${gameState.score}\nMoney: $${gameState.money}\nSpeed: ${gameState.moveSpeed}\nFire Rate: ${gameState.fireInterval}\nBullet Spd: ${gameState.bulletSpeed}`,
+                    { fontSize: '16px', fill: '#fff' }
+                );
                 this.levelText = this.add.text(this.scale.width / 2, 10, `Level: ${gameState.level}`, { fontSize: '16px', fill: '#ffff00' }).setOrigin(0.5, 0);
 
                 // Zombie Icon and Count (Top Right)
@@ -274,7 +277,10 @@
                 cleanup(this.enemyBullets);
 
                 // 6. UI Updates
-                this.scoreText.setText(`Score: ${gameState.score}\nMoney: $${gameState.money}`);
+                // 6. UI Updates
+                this.scoreText.setText(
+                    `Score: ${gameState.score}\nMoney: $${gameState.money}\nSpeed: ${gameState.moveSpeed}\nFire Rate: ${gameState.fireInterval}\nBullet Spd: ${gameState.bulletSpeed}`
+                );
 
                 // Calculate remaining counts
                 const counts = { normal: 0, pig: 0, female: 0, boss: 0 };
