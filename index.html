@@ -37,11 +37,13 @@
             fireInterval: 400,
             bulletSpeed: 500,
             bulletDamage: 1,
+            bulletCount: 1,
             money: 0,
             score: 0,
             level: 1,
             maxHealth: 3,
-            currentHealth: 3
+            currentHealth: 3,
+            hasMotorcycle: false
         };
 
         // Mutable game state
@@ -61,6 +63,7 @@
 
             preload() {
                 this.load.image('hero', 'hero.png');
+                this.load.svg('motorcycle', 'motorcycle.svg', { width: 64, height: 64 });
                 this.load.svg('zombie', 'zombie.svg', { width: 64, height: 64 });
                 this.load.svg('pig', 'pig.svg', { width: 64, height: 64 });
                 this.load.svg('female', 'female.svg', { width: 64, height: 64 });
@@ -131,8 +134,9 @@
                 });
 
                 // --- Player ---
-                // Create Player Sprite
-                this.player = this.physics.add.sprite(this.scale.width / 2, this.scale.height / 2, 'hero');
+                // Create Player Sprite (use motorcycle if purchased)
+                const playerTexture = gameState.hasMotorcycle ? 'motorcycle' : 'hero';
+                this.player = this.physics.add.sprite(this.scale.width / 2, this.scale.height / 2, playerTexture);
                 this.player.setCollideWorldBounds(true);
 
                 // Resize to appropriate game size (Adjusted: 60x60 based on tighter crop)
@@ -450,15 +454,36 @@
                 const x = this.player.x + offset.x;
                 const y = this.player.y + offset.y;
 
-                // Create bullet
-                // Using a small yellow rectangle
-                const bullet = this.add.rectangle(x, y, 8, 8, 0xffff00);
-                this.physics.add.existing(bullet);
-                this.bullets.add(bullet);
+                // Calculate spread angles based on bullet count
+                const bulletCount = gameState.bulletCount;
+                const spreadAngle = Math.PI / 6; // 30 degrees total spread
 
-                // Move bullet
-                const vec = this.lastDirection.clone().scale(gameState.bulletSpeed);
-                bullet.body.setVelocity(vec.x, vec.y);
+                for (let i = 0; i < bulletCount; i++) {
+                    // Calculate angle offset for this bullet
+                    let angleOffset = 0;
+                    if (bulletCount > 1) {
+                        // Distribute bullets evenly across the spread angle
+                        angleOffset = ((i / (bulletCount - 1)) - 0.5) * spreadAngle;
+                    }
+
+                    // Calculate direction with spread
+                    const baseAngle = this.lastDirection.angle();
+                    const bulletAngle = baseAngle + angleOffset;
+                    const direction = new Phaser.Math.Vector2(Math.cos(bulletAngle), Math.sin(bulletAngle));
+
+                    // Create bullet
+                    // Using a thin blue short line
+                    const bullet = this.add.rectangle(x, y, 20, 2, 0x0088ff);
+                    this.physics.add.existing(bullet);
+                    this.bullets.add(bullet);
+
+                    // Rotate bullet to match direction of travel
+                    bullet.rotation = bulletAngle;
+
+                    // Move bullet
+                    const vec = direction.clone().scale(gameState.bulletSpeed);
+                    bullet.body.setVelocity(vec.x, vec.y);
+                }
             }
 
             enemyShoot(zombie) {
@@ -630,11 +655,17 @@
                 this.createUpgradeRow(centerX, y, 'Movement Speed', 'moveSpeed', 100, (val) => val + 20);
                 y += 80;
                 this.createUpgradeRow(centerX, y, 'Bullet Speed', 'bulletSpeed', 80, (val) => val + 50);
+                y += 80;
+                this.createUpgradeRow(centerX, y, 'Spread Gun', 'bulletCount', 150, (val) => Math.min(5, val + 1));
+                y += 80;
+
+                // Motorcycle upgrade - special one-time purchase
+                this.createMotorcycleUpgrade(centerX, y);
 
                 // Next Level Button
-                const nextBtn = this.add.rectangle(centerX, 500, 200, 60, 0x00aa00)
+                const nextBtn = this.add.rectangle(centerX, 580, 200, 60, 0x00aa00)
                     .setInteractive({ useHandCursor: true });
-                const nextText = this.add.text(centerX, 500, "Start Next Level", { fontSize: '24px', fill: '#fff' }).setOrigin(0.5);
+                const nextText = this.add.text(centerX, 580, "Start Next Level", { fontSize: '24px', fill: '#fff' }).setOrigin(0.5);
 
                 nextBtn.on('pointerdown', () => {
                     gameState.level++;
@@ -646,7 +677,7 @@
                 nextBtn.on('pointerout', () => nextBtn.setFillStyle(0x00aa00));
             }
 
-            createUpgradeRow(x, y, label, statKey, cost, modifierFn) {
+            createUpgradeRow(x, y, label, statKey, cost, modifierFn, maxValue = null) {
                 // Label with current stat
                 let currentVal = gameState[statKey];
                 // Format fireInterval to Shots Per Sec for display? Or just raw number. Raw is fine for simplicity.
@@ -661,19 +692,30 @@
                 const btnText = this.add.text(x + 150, y, `Buy ($${cost})`, { fontSize: '18px', fill: '#fff' }).setOrigin(0.5);
 
                 const updateBtn = () => {
-                    if (gameState.money >= cost) {
+                    const isMaxed = maxValue !== null && gameState[statKey] >= maxValue;
+
+                    if (isMaxed) {
+                        btn.setFillStyle(0x555555);
+                        btnText.setText('MAXED');
+                        btnText.setColor('#ffff00');
+                        btn.disableInteractive();
+                    } else if (gameState.money >= cost) {
                         btn.setFillStyle(0x0088ff);
                         btnText.setText(`Buy ($${cost})`);
                         btnText.setColor('#ffffff');
+                        btn.setInteractive({ useHandCursor: true });
                     } else {
                         btn.setFillStyle(0x333333);
                         btnText.setColor('#888888');
+                        btn.setInteractive({ useHandCursor: true });
                     }
                     labelText.setText(`${label}: ${gameState[statKey]}`);
                 };
 
                 btn.on('pointerdown', () => {
-                    if (gameState.money >= cost) {
+                    const isMaxed = maxValue !== null && gameState[statKey] >= maxValue;
+
+                    if (!isMaxed && gameState.money >= cost) {
                         gameState.money -= cost;
                         gameState[statKey] = modifierFn(gameState[statKey]);
                         // Visual feedback
@@ -701,6 +743,64 @@
                 });
 
 
+
+                updateBtn();
+            }
+
+            createMotorcycleUpgrade(x, y) {
+                const cost = 400;
+                const label = 'Motorcycle';
+
+                // Status text
+                const statusText = gameState.hasMotorcycle ? 'OWNED' : 'Not Owned';
+                const labelText = this.add.text(x - 200, y, `${label}: ${statusText}`, { fontSize: '20px', fill: '#aaa' }).setOrigin(0, 0.5);
+
+                // Buy Button
+                const btn = this.add.rectangle(x + 150, y, 140, 40, 0x444444).setInteractive({ useHandCursor: true });
+                const btnText = this.add.text(x + 150, y, `Buy ($${cost})`, { fontSize: '18px', fill: '#fff' }).setOrigin(0.5);
+
+                const updateBtn = () => {
+                    if (gameState.hasMotorcycle) {
+                        btn.setFillStyle(0x555555);
+                        btnText.setText('OWNED');
+                        btnText.setColor('#00ff00');
+                        btn.disableInteractive();
+                        labelText.setText(`${label}: OWNED`);
+                    } else if (gameState.money >= cost) {
+                        btn.setFillStyle(0x0088ff);
+                        btnText.setText(`Buy ($${cost})`);
+                        btnText.setColor('#ffffff');
+                        btn.setInteractive({ useHandCursor: true });
+                    } else {
+                        btn.setFillStyle(0x333333);
+                        btnText.setColor('#888888');
+                        btn.setInteractive({ useHandCursor: true });
+                    }
+                };
+
+                btn.on('pointerdown', () => {
+                    if (!gameState.hasMotorcycle && gameState.money >= cost) {
+                        gameState.money -= cost;
+                        gameState.hasMotorcycle = true;
+
+                        // Apply motorcycle bonuses
+                        gameState.moveSpeed *= 2;  // Double the speed
+                        gameState.maxHealth += 5;   // Add 5 lives
+                        gameState.currentHealth += 5; // Add 5 to current health too
+
+                        // Visual feedback
+                        this.tweens.add({
+                            targets: btn,
+                            scaleX: 1.1,
+                            scaleY: 1.1,
+                            duration: 50,
+                            yoyo: true
+                        });
+
+                        updateBtn();
+                        this.moneyText.setText(`Money Available: $${gameState.money}`);
+                    }
+                });
 
                 updateBtn();
             }

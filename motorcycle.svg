@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Motorcycle body -->
+  <ellipse cx="32" cy="40" rx="8" ry="4" fill="#333333"/>
+  
+  <!-- Wheels -->
+  <circle cx="22" cy="48" r="6" fill="#222222" stroke="#444444" stroke-width="2"/>
+  <circle cx="42" cy="48" r="6" fill="#222222" stroke="#444444" stroke-width="2"/>
+  <circle cx="22" cy="48" r="3" fill="#666666"/>
+  <circle cx="42" cy="48" r="3" fill="#666666"/>
+  
+  <!-- Frame -->
+  <line x1="32" y1="40" x2="22" y2="48" stroke="#555555" stroke-width="3"/>
+  <line x1="32" y1="40" x2="42" y2="48" stroke="#555555" stroke-width="3"/>
+  <rect x="28" y="35" width="8" height="8" fill="#4169E1" rx="2"/>
+  
+  <!-- Handlebars -->
+  <line x1="28" y1="32" x2="36" y2="32" stroke="#666666" stroke-width="2"/>
+  <circle cx="28" cy="32" r="2" fill="#888888"/>
+  <circle cx="36" cy="32" r="2" fill="#888888"/>
+  
+  <!-- Rider head -->
+  <circle cx="32" cy="22" r="6" fill="#FFD4A3"/>
+  
+  <!-- Helmet -->
+  <path d="M 26 22 Q 26 16 32 16 Q 38 16 38 22 Z" fill="#1E90FF"/>
+  <ellipse cx="32" cy="21" rx="4" ry="2" fill="#87CEEB" opacity="0.6"/>
+  
+  <!-- Rider body -->
+  <rect x="28" y="26" width="8" height="10" fill="#2C3E50" rx="2"/>
+  
+  <!-- Arms -->
+  <line x1="28" y1="28" x2="24" y2="32" stroke="#2C3E50" stroke-width="3" stroke-linecap="round"/>
+  <line x1="36" y1="28" x2="40" y2="32" stroke="#2C3E50" stroke-width="3" stroke-linecap="round"/>
+  
+  <!-- Exhaust pipes -->
+  <rect x="38" y="42" width="6" height="2" fill="#888888" rx="1"/>
+  <rect x="40" y="43" width="4" height="1" fill="#FFD700"/>
+</svg>
